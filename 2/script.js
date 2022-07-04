@@ -1,22 +1,136 @@
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize( window.innerWidth, window.innerHeight );
-document.body.appendChild( renderer.domElement );
+var waveGrid = function (opt) {
+    opt = opt || {};
+    opt.width = opt.width || 30;
+    opt.depth = opt.depth || 30;
+    opt.height = opt.height || 2;
+    opt.forPoint = opt.forPoint || function () {};
+    opt.context = opt.context || opt;
+    opt.xStep = opt.xStep || 0.075;
+    opt.yStep = opt.yStep || 0.1;
+    opt.zStep = opt.zStep || 0.075;
+    opt.waveOffset = opt.waveOffset === undefined ? 0 : opt.waveOffset;
+    var points = [],
+    radPer,
+    x = 0,
+    i = 0,
+    y,
+    z;
+    // points
+    while (x < opt.width) {
+        z = 0;
+        while (z < opt.depth) {
+            // radian percent
+            radPer = (z / opt.depth + (1 / opt.width * x) + opt.waveOffset) % 1;
+            // y value of point
+            y = Math.cos(Math.PI * 4 * radPer) * opt.height;
+            // call forPoint
+            opt.forPoint.call(opt.context, x * opt.xStep, y * opt.yStep, z * opt.zStep, i);
+            // step z, and point index
+            z += 1;
+            i += 3;
+        }
+        x += 1;
+    };
+};
 
-const geometry = new THREE.BoxGeometry( 1, 1, 1 );
-const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-const cube = new THREE.Mesh( geometry, material );
-scene.add( cube );
-
-camera.position.z = 5;
-
-function animate() {
-	requestAnimationFrame( animate );
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
-	renderer.render( scene, camera );
+// update points
+var updatePoints = function (points, per) {
+    var position = points.geometry.getAttribute('position');
+    // update points
+    waveGrid({
+        waveOffset: per,
+        xStep: 0.125,
+        zStep: 0.125,
+        forPoint: function (x, y, z, i) {
+            position.array[i] = x - 2;
+            position.array[i + 1] = y - 2;
+            position.array[i + 2] = z - 2;
+        }
+    });
+    position.needsUpdate = true;
 }
 
-animate();
+var renderer = new THREE.WebGLRenderer({
+    //antialias: true
+});
+renderer.setSize(640, 480);
+document.getElementById('demo').appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+var fogColor = new THREE.Color(1.0, 0.25, 0.0);
+scene.background = fogColor;
+scene.fog = new THREE.FogExp2(fogColor, 0.3);
+
+// make a points mesh
+var makePoints = function () {
+    var geometry = new THREE.BufferGeometry();
+    var points = [],
+    opt = {};
+    opt.forPoint = function (x, y, z, i) {
+        points.push(x, y, z);
+    };
+    waveGrid(opt);
+    var vertices = new Float32Array(points);
+    // itemSize = 3 because there are 3 values (components) per vertex
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    return new THREE.Points(
+        // geometry as first argument
+        geometry,
+        // then Material
+        new THREE.PointsMaterial({
+            size: .125,
+            color: new THREE.Color(0.0, 0.25, 0.25)
+        }));
+};
+
+var points = makePoints();
+scene.add(points);
+
+var camera = new THREE.PerspectiveCamera(40, 320 / 240, .001, 1000);
+
+// position of points an camera
+points.position.set(0, 2.5, 0);
+camera.position.set(3.0, 3.0, 2.5);
+
+var windowHalfX = window.innerWidth / 2;
+var windowHalfY = window.innerHeight / 2;
+var mouseX = 0;
+var mouseY = 0;
+var mouseZ = 0;
+window.addEventListener('mousemove', onDocumentMouseMove, false);
+function onDocumentMouseMove(event) {
+    mouseX = (event.clientX - windowHalfX) / 100;
+    //mouseY = (event.clientY - windowHalfY) / 100;
+}
+
+var frame = 0;
+maxFrame = 300;
+lt = new Date();
+fps = 20;
+var d = 0.1;
+function loop(){
+    var now = new Date(),
+    secs = (now - lt) / 1000,
+    per = frame / maxFrame,
+    bias = 1 - Math.abs(per - 0.5) / 0.5,
+    mul = 3;
+    requestAnimationFrame(loop);
+
+    if (secs > 1 / fps) {
+        updatePoints(points, per * mul % 1);
+        
+        camera.position.x += (mouseX - camera.position.x) * .01;
+        //camera.position.y += (-mouseY - camera.position.y) * .01;
+        camera.lookAt(scene.position);
+
+        renderer.render(scene, camera);
+        frame += fps * secs;
+        frame %= maxFrame;
+        lt = now;
+    }
+};
+
+loop();
+
+
