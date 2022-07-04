@@ -1,3 +1,7 @@
+var windowHalfX = 640/2;
+var windowHalfY = 480/2;
+var mouseX = 0;
+var mouseY = 0;
 
 var waveGrid = function (opt) {
     opt = opt || {};
@@ -37,12 +41,21 @@ var waveGrid = function (opt) {
 // update points
 var updatePoints = function (points, per) {
     var position = points.geometry.getAttribute('position');
+    var boatpos = boat.position;
     // update points
     waveGrid({
         waveOffset: per,
         xStep: 0.125,
         zStep: 0.125,
         forPoint: function (x, y, z, i) {
+            //add slope
+            if( Math.round(x) == Math.round(boatpos.x)
+                && Math.round(z) == Math.round(boatpos.z)){
+                boat.position.y = .7 + y;
+                /* boat.position.x = x;
+                boat.position.z = z; */
+            }
+            
             position.array[i] = x - 2;
             position.array[i + 1] = y - 2;
             position.array[i + 2] = z - 2;
@@ -57,10 +70,19 @@ var renderer = new THREE.WebGLRenderer({
 renderer.setSize(640, 480);
 document.getElementById('demo').appendChild(renderer.domElement);
 
+window.addEventListener('mousemove', onDocumentMouseMove, false);
+function onDocumentMouseMove(event) {
+    mouseX = (event.clientX - windowHalfX) / 10;
+    mouseY = (event.clientY - windowHalfY) / 10;
+}
+
+
+
 var scene = new THREE.Scene();
-var fogColor = new THREE.Color(1.0, 0.25, 0.0);
+var fogColor = new THREE.Color(0.0, 0.0, 0.0);
 scene.background = fogColor;
 scene.fog = new THREE.FogExp2(fogColor, 0.3);
+
 
 // make a points mesh
 var makePoints = function () {
@@ -83,26 +105,48 @@ var makePoints = function () {
             color: new THREE.Color(0.0, 0.25, 0.25)
         }));
 };
+var makeBoat = function (x,y,z) {
+    var geometry = new THREE.BoxGeometry(0.2,0.2,0.2);
+    var material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    return new THREE.Mesh(geometry,material);
+};
+
+
+var makeMat = function(x,y,z){
+    var geometry = new THREE.MeshBasicMaterial({color: 0x004488,wireframe: true});
+    var material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+}
+
 
 var points = makePoints();
-scene.add(points);
+var boat = makeBoat();
 
-var camera = new THREE.PerspectiveCamera(40, 320 / 240, .001, 1000);
+document.addEventListener('keydown', (event) => {
+    if(event.key == "i"){
+        boat.position.z = boat.position.z + 0.1;
+    }
+    if(event.key == "k"){
+        boat.position.z = boat.position.z - 0.1;
+    }
+    if(event.key == "j"){
+        boat.position.x = boat.position.x - 0.1;
+    }
+    if(event.key == "l"){
+        boat.position.x = boat.position.x + 0.1;
+    }
+  }, false);
+
+//scene.add(mat);
+scene.add(points);
+scene.add(boat);
+
+camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10);
 
 // position of points an camera
+//mat.position.set(0,2.5,0);
 points.position.set(0, 2.5, 0);
-camera.position.set(3.0, 3.0, 2.5);
-
-var windowHalfX = window.innerWidth / 2;
-var windowHalfY = window.innerHeight / 2;
-var mouseX = 0;
-var mouseY = 0;
-var mouseZ = 0;
-window.addEventListener('mousemove', onDocumentMouseMove, false);
-function onDocumentMouseMove(event) {
-    mouseX = (event.clientX - windowHalfX) / 100;
-    //mouseY = (event.clientY - windowHalfY) / 100;
-}
+boat.position.set(0, 2.5, 0);
+camera.position.set(1, 2.5, 1.5);
 
 var frame = 0;
 maxFrame = 300;
@@ -119,9 +163,7 @@ function loop(){
 
     if (secs > 1 / fps) {
         updatePoints(points, per * mul % 1);
-        
-        camera.position.x += (mouseX - camera.position.x) * .01;
-        //camera.position.y += (-mouseY - camera.position.y) * .01;
+        //updateBoat();
         camera.lookAt(scene.position);
 
         renderer.render(scene, camera);
